@@ -127,6 +127,7 @@ def itemPatients(odm_xml, param):
             if SubjectData.tag == '{http://www.cdisc.org/ns/odm/v1.3}SubjectData':
                 for Element in SubjectData[2][1]:
                     for ItemOID in Element:
+                        print(ItemOID)
                         if Element.tag == "{http://www.cdisc.org/ns/odm/v1.3}ItemGroupData":
                             if (ItemOID.attrib['ItemOID']) == param:
                                 lglobale.append((ClinicalData.attrib['StudyOID'],
@@ -177,7 +178,7 @@ def SubjectKeyList(odm_xml):
 
 
 #function that return the value the list of patient for a specific item
-def PatientItem(my_tree, ItemOID):
+def PatientItem(odm_xml, ItemOID):
     my_tree = et.ElementTree(odm_xml)
     root = my_tree.getroot()
     my_root = et.fromstring(root)
@@ -211,14 +212,15 @@ curr_token = get_viedoc_token_response.Token
 get_viedoc_token_response = get_viedoc_sites(curr_token)
 print(get_viedoc_token_response)
 
-GetMetaData_data_request = {
-    'metaDataOid': '6.0',
-    'includeSdm' : 'false',
-    'includeViedocExtensions' : 'false'
 
-}
 
-def Get_GetMetaData(curr_token, GetMetaData_data_request):
+def Get_GetMetaData(curr_token, metaDataOid):
+    GetMetaData_data_request = {
+        'metaDataOid': metaDataOid,
+        'includeSdm': 'false',
+        'includeViedocExtensions': 'false'
+
+    }
     metaDataOid=GetMetaData_data_request['metaDataOid']
     includeSdm=GetMetaData_data_request['includeSdm']
     includeViedocExtensions=GetMetaData_data_request['includeViedocExtensions']
@@ -227,8 +229,8 @@ def Get_GetMetaData(curr_token, GetMetaData_data_request):
     except zeep.exceptions.Fault as fault:
             print(fault.detail)
     return viedoc_clinical_data
-
-test=Get_GetMetaData(curr_token, GetMetaData_data_request)
+""""
+test=Get_GetMetaData(curr_token, '6.0')
 odm_xml = test.OdmXml
 with open ('example_metadata.txt', 'w') as file:
    file.write(odm_xml)
@@ -295,6 +297,33 @@ print(test_patient)
 test_patient.to_csv('get_viedoc_pat_bl test', encoding='utf-8', index=False)
 
 #example the list of COHORT for all the patient
-test_patient=itemPatients(odm_xml, 'COHORT')
+test_patient=PatientItem(odm_xml, 'COHORT')
 print(test_patient)
 test_patient.to_csv('COHORT patient', encoding='utf-8', index=False)
+"""
+
+#example function to get all data patient
+def get_viedoc(curr_token):
+    getclinical_data_request = {
+        'SiteCode': 'FR'
+    }
+    Clinical_Data = Get_Clinical_Data(curr_token, getclinical_data_request)
+    odm_xml = Clinical_Data.OdmXml
+    patient=SubjectKeyList(odm_xml)
+    for i in range(len(patient)):
+        print(patient.loc[i, "SubjectKey"], patient.loc[i,"MetaDataVersionOID"])
+        SubjectKey = patient.loc[i, "SubjectKey"]
+        MetaDataVersionOID = patient.loc[i, "MetaDataVersionOID"]
+        getclinical_foronepatient = {
+            'SiteCode': 'FR',
+            'SubjectKey': SubjectKey
+        }
+        Clinical_Data_for_i = Get_Clinical_Data(curr_token, getclinical_foronepatient)
+        odm_xml_for_i = Clinical_Data_for_i.OdmXml
+        json_for_i = XmlToJson(odm_xml)
+        patient.loc[i, "JSON"] = json_for_i
+        patient.loc[i, "CDISC"] = odm_xml_for_i
+    return patient
+
+patient = get_viedoc(curr_token)
+patient.to_csv('example_all_patients', encoding='utf-8', index=False)
